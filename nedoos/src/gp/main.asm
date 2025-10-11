@@ -2,7 +2,7 @@
 	include "../_sdk/sys_h.asm"
 	include "playerdefs.asm"
 
-NUM_PLAYERS = 5
+NUM_PLAYERS = 6
 SFN_SIZE = 13
 FILE_DATA_SIZE = 52 ;keep in sync with getfiledataoffset
 FILE_DISPLAY_INFO_OFFSET = 0
@@ -1339,18 +1339,23 @@ loadplayers
 	ld a,(filehandle)
 	ld b,a
 	OS_GETFILESIZE
-	ld de,plrend-plrbegin
-	sub hl,de
+	ld bc,plrfilesize%65536
+	sub hl,bc
+	ld hl,invalidplayerfilestr
+	ret nz
+	ld hl,plrfilesize/65536
+	sbc hl,de
 	ld hl,invalidplayerfilestr
 	ret nz
 ;load players from file
 	xor a
 	ld (playercount),a
-	ld de,modend-modstart : ld hl,(gpsettings.usemoonmod) : call loadplayer
-	ld de,mwmend-mwmstart : ld hl,(gpsettings.usemwm) : call loadplayer
-	ld de,mp3end-mp3start : ld hl,(gpsettings.usemp3) : call loadplayer
-	ld de,pt3end-pt3start : ld hl,(gpsettings.usept3) : call loadplayer
-	ld de,vgmend-vgmstart : ld hl,(gpsettings.usevgm) : call loadplayer
+	ld de,modplrsize : ld hl,(gpsettings.usemoonmod) : call loadplayer
+	ld de,mwmplrsize : ld hl,(gpsettings.usemwm) : call loadplayer
+	ld de,mp3plrsize : ld hl,(gpsettings.usemp3) : call loadplayer
+	ld de,pt3plrsize : ld hl,(gpsettings.usept3) : call loadplayer
+	ld de,vgmplrsize : ld hl,(gpsettings.usevgm) : call loadplayer
+	ld de,moonmidsize : ld hl,(gpsettings.usemoonmid) : call loadplayer
 	call closestream_file
 	ld a,(playercount)
 	dec a
@@ -1591,6 +1596,7 @@ settingsvars
 	db 0x7F : dw gpsettings.moonmoddefaultpanning
 	db 0x7A : dw gpsettings.midiuartdelayoverride
 	db 0x61 : dw bomgemoonsettings
+	db 0x20 : dw gpsettings.usemoonmid
 settingsvarcount=($-settingsvars)/3
 
 getfileextension
@@ -2073,6 +2079,8 @@ lightweightinterrupthandler
 
 mainend
 
+	savebin "gp.com",mainbegin,mainend-mainbegin
+
 playerpages
 	ds NUM_PLAYERS
 filinfo
@@ -2105,26 +2113,32 @@ playlistchanged ds 1
 
 	assert $ <= 0x3e00 ;reserve 512 bytes for stack
 
-	savebin "gp.com",mainbegin,mainend-mainbegin
-
-	org 0x0000
-
-plrbegin
+	org 0
 modstart
 	incbin "moonmod.bin"
-modend
+modplrsize=$-modstart
 mwmstart
 	incbin "mwm.bin"
-mwmend
+mwmplrsize=$-mwmstart
 mp3start
 	incbin "mp3.bin"
-mp3end
+mp3plrsize=$-mp3start
 pt3start
 	incbin "pt3.bin"
-pt3end
+pt3plrsize=$-pt3start
 vgmstart
 	incbin "vgm.bin"
-vgmend
-plrend
+vgmplrsize=$-vgmstart
+plrpart1size=$
 
-	savebin "gp.plr",plrbegin,plrend-plrbegin
+	savebin "gp1.plr",0,plrpart1size
+
+	org 0
+moonmidstart
+	incbin "mp3.bin"
+moonmidsize=$-moonmidstart
+plrpart2size=$
+
+	savebin "gp2.plr",0,plrpart2size
+
+plrfilesize=plrpart1size+plrpart2size
