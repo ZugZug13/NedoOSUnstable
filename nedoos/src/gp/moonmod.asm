@@ -240,4 +240,4 @@ s3mheader S3MHEADER
 	assert MODWAVEHEADERBUFFERSIZE <= PLAYEREND-modwaveheaderbuffer
 	assert S3MWAVEHEADERBUFFERSIZE <= PLAYEREND-s3mwaveheaderbuffer
 
-	savebin "moonmod.bin",begin,end-begin
+	savebin "gp/moonmod.plr",begin,end-begin

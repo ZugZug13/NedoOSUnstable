@@ -552,4 +552,4 @@ filechunkcounter
 titlestr
 	ds TITLELENGTH+1
 
-	savebin "mp3.bin",begin,end-begin
+	savebin "gp/mp3.plr",begin,end-begin

@@ -1488,4 +1488,4 @@ HEADER_CLOCK_AY8910  = vgmheadercopy+0x74
 	assert GzipOutputBuffersEnd <= 0x10000
 	assert GzipWorkBuffersEnd <= 0x3500 ;ensure the buffers and stack are not overlapping
 
-	savebin "vgm.bin",begin,end-begin
+	savebin "gp/vgm.plr",begin,end-begin

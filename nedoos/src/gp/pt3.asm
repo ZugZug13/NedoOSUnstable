@@ -760,4 +760,4 @@ midplayer MIDPLAYER
 
 	assert $ <= PLAYEREND ;ensure everything is within the player page
 
-	savebin "pt3.bin",begin,end-begin
+	savebin "gp/pt3.plr",begin,end-begin

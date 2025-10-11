@@ -2,7 +2,7 @@
 	include "../_sdk/sys_h.asm"
 	include "playerdefs.asm"
 
-NUM_PLAYERS = 5
+MAX_NUM_PLAYERS = 16
 SFN_SIZE = 13
 FILE_DATA_SIZE = 52 ;keep in sync with getfiledataoffset
 FILE_DISPLAY_INFO_OFFSET = 0
@@ -1110,12 +1110,17 @@ tolower
 	add 32
 	ret
 
+
+filestr
+	db "Player ",0
+isdisabledstr
+	db " is disabled!",0
+crstr
+	db "\r\n",0
 pressanykeystr
 	db "\r\nPress any key to continue...\r\n",0
 playersfilename
 	db "gp/gp.plr",0
-gpsysfile
-	db "gp/gp.sys",0
 settingsfilename
 	db "gp/gp.ini",0
 defaultplaylistfilename
@@ -1126,11 +1131,10 @@ invalidplayerfilestr
 	db "Corrupted gp/gp.plr file!",0
 noplayersloadedstr
 	db "Unable to load any players!",0
+failedtoloadstr
+	db "Failed to load ",0
 playersloaderrorstr
 	db "Failed to load gp/gp.plr from OS folder!",0
-gpsysloaderrorstr
-	db "Failed to load gp/gp.sys from OS folder!",0
-
 settingswritemessage
 	db "Default gp/gp.ini writed successfully!\r\n",0
 settingswriteerror	
@@ -1276,94 +1280,6 @@ devicelist
 	dw deviceopm
 	dw devicedualopm
 	dw deviceopna
-
-loadplayer
-;de = code size
-;hl = settings variable addr
-	ld (.codesize),de
-	ld a,h
-	or l
-	ld a,'1' ;default for Use<Player> variable is 1
-	jr z,$+3
-	ld a,(hl)
-	ld (.settingsvalue),a
-	OS_NEWPAGE
-	or a
-	ret nz
-	ld a,e
-	ld (.playerpage),a
-	SETPG4000
-	ld de,0x4000
-.codesize=$+1
-	ld hl,0
-	call readstream_file
-.settingsvalue=$+1
-	ld a,0
-	cp '0'
-	jr z,.cleanup
-	ld hl,initializing1str
-	call print_hl
-	ld hl,(PLAYERNAMESTRADDR)
-	call print_hl
-	ld hl,initializing2str
-	call print_hl
-	ld hl,gpsettings
-	ld ix,gpsettings
-	ld a,(.playerpage)
-	call playerinit
-	push af
-	call print_hl
-	pop af
-	jr nz,.cleanup
-	ld hl,playercount
-	ld e,(hl)
-	inc (hl)
-	ld d,0
-	ld hl,playerpages
-	add hl,de
-.playerpage=$+1
-	ld (hl),0
-	ret
-.cleanup
-	ld a,(.playerpage)
-	ld e,a
-	OS_DELPAGE
-	ret
-
-loadplayers
-;output: zf=1 if success, zf=0 and hl=error message if failed
-	ld de,playersfilename
-	call openstream_file
-	or a
-	ld hl,playersloaderrorstr
-	ret nz
-;check if the file matches this build
-	ld a,(filehandle)
-	ld b,a
-	OS_GETFILESIZE
-	ld de,plrend-plrbegin
-	sub hl,de
-	ld hl,invalidplayerfilestr
-	ret nz
-;load players from file
-	xor a
-	ld (playercount),a
-	ld de,modend-modstart : ld hl,(gpsettings.usemoonmod) : call loadplayer
-	ld de,mwmend-mwmstart : ld hl,(gpsettings.usemwm) : call loadplayer
-	ld de,mp3end-mp3start : ld hl,(gpsettings.usemp3) : call loadplayer
-	ld de,pt3end-pt3start : ld hl,(gpsettings.usept3) : call loadplayer
-	ld de,vgmend-vgmstart : ld hl,(gpsettings.usevgm) : call loadplayer
-	call closestream_file
-	ld a,(playercount)
-	dec a
-	ld hl,noplayersloadedstr
-	ret m
-	xor a
-	ret
-
-
-
-
 
 gpsettings GPSETTINGS
 bomgemoonsettings dw 0
@@ -1719,11 +1635,12 @@ pagSysStart:
 pagSysEnd:
 mainend
 
+	display "gpsys = ",/d,pagSysEnd-pagSysStart," bytes"
 	savebin "gp.com",mainbegin,mainend-mainbegin
 
         org tempmemorya
 playerpages
-	ds NUM_PLAYERS
+	ds MAX_NUM_PLAYERS
 filinfo
 	ds FILINFO_sz
 currentfolder
@@ -1754,30 +1671,6 @@ playlistchanged ds 1
 
 	assert $ <= 0x3e00 ;reserve 512 bytes for stack
 
-
-
-
-	org 0x0000
-
-plrbegin
-modstart
-	incbin "moonmod.bin"
-modend
-mwmstart
-	incbin "mwm.bin"
-mwmend
-mp3start
-	incbin "mp3.bin"
-mp3end
-pt3start
-	incbin "pt3.bin"
-pt3end
-vgmstart
-	incbin "vgm.bin"
-vgmend
-plrend
-
-	savebin "gp.plr",plrbegin,plrend-plrbegin
 
 
 	

@@ -1,4 +1,5 @@
 if "%settedpath%"=="" call ../_sdk/setpath.bat
+if not exist gp mkdir gp
 sjasmplus --nologo --msg=war mwm.asm
 sjasmplus --nologo --msg=war pt3.asm
 sjasmplus --nologo --msg=war ngsdec/gscode.asm
@@ -8,17 +9,21 @@ sjasmplus --nologo --msg=war moonmod.asm
 sjasmplus --nologo --msg=war main.asm
 rem sjasmplus --nologo --msg=war moonmod/generateperiodlookup.asm
 
+
+SET releasedir2=../../release/
 if "%currentdir%"=="" (
- copy /Y gp.com "../../release/bin/" > nul
- copy /Y gp.plr "../../release/bin/gp/" > nul
- "../../tools/dmimg.exe" ../../us/hdd_nedo.vhd put gp.com /bin/gp.com
- "../../tools/dmimg.exe" ../../us/hdd_nedo.vhd put gp.plr /bin/gp/gp.plr
+  FOR %%j IN (*.com) DO (
+  "../../tools/dmimg.exe" ../../us/sd_nedo.vhd put %%j /bin/%%j
+  move "*.com" "%releasedir2%bin" > nul
+  IF EXIST %%~nj xcopy /Y /E "%%~nj" "%releasedir2%bin\%%~nj\" > nul
+  )
 
+  cd ../../src/
 
- "../../tools/dmimg.exe" ../../us/sd_nedo.vhd put gp.com /bin/gp.com
- "../../tools/dmimg.exe" ../../us/sd_nedo.vhd put gp.plr /bin/gp/gp.plr
+  call ..\tools\chkimg.bat sd
+  rem call ..\tools\chkimg.bat hdd
 
+  rem pause
 
- pause
- if "%makeall%"=="" ..\..\us\emul.exe
+ if "%makeall%"=="" ..\us\emul.exe
 )
