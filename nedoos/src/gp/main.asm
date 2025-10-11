@@ -2,7 +2,11 @@
 	include "../_sdk/sys_h.asm"
 	include "playerdefs.asm"
 
+<<<<<<< HEAD
 MAX_NUM_PLAYERS = 16
+=======
+NUM_PLAYERS = 6
+>>>>>>> f39a963bd4664e19a3f5d5832b2a7357a765e638
 SFN_SIZE = 13
 FILE_DATA_SIZE = 52 ;keep in sync with getfiledataoffset
 FILE_DISPLAY_INFO_OFFSET = 0
@@ -1281,6 +1285,318 @@ devicelist
 	dw devicedualopm
 	dw deviceopna
 
+<<<<<<< HEAD
+=======
+loadplayer
+;de = code size
+;hl = settings variable addr
+	ld (.codesize),de
+	ld a,h
+	or l
+	ld a,'1' ;default for Use<Player> variable is 1
+	jr z,$+3
+	ld a,(hl)
+	ld (.settingsvalue),a
+	OS_NEWPAGE
+	or a
+	ret nz
+	ld a,e
+	ld (.playerpage),a
+	SETPG4000
+	ld de,0x4000
+.codesize=$+1
+	ld hl,0
+	call readstream_file
+.settingsvalue=$+1
+	ld a,0
+	cp '0'
+	jr z,.cleanup
+	ld hl,initializing1str
+	call print_hl
+	ld hl,(PLAYERNAMESTRADDR)
+	call print_hl
+	ld hl,initializing2str
+	call print_hl
+	ld hl,gpsettings
+	ld ix,gpsettings
+	ld a,(.playerpage)
+	call playerinit
+	push af
+	call print_hl
+	pop af
+	jr nz,.cleanup
+	ld hl,playercount
+	ld e,(hl)
+	inc (hl)
+	ld d,0
+	ld hl,playerpages
+	add hl,de
+.playerpage=$+1
+	ld (hl),0
+	ret
+.cleanup
+	ld a,(.playerpage)
+	ld e,a
+	OS_DELPAGE
+	ret
+
+loadplayers
+;output: zf=1 if success, zf=0 and hl=error message if failed
+	ld de,playersfilename
+	call openstream_file
+	or a
+	ld hl,playersloaderrorstr
+	ret nz
+;check if the file matches this build
+	ld a,(filehandle)
+	ld b,a
+	OS_GETFILESIZE
+	ld bc,plrfilesize%65536
+	sub hl,bc
+	ld hl,invalidplayerfilestr
+	ret nz
+	ld hl,plrfilesize/65536
+	sbc hl,de
+	ld hl,invalidplayerfilestr
+	ret nz
+;load players from file
+	xor a
+	ld (playercount),a
+	ld de,modplrsize : ld hl,(gpsettings.usemoonmod) : call loadplayer
+	ld de,mwmplrsize : ld hl,(gpsettings.usemwm) : call loadplayer
+	ld de,mp3plrsize : ld hl,(gpsettings.usemp3) : call loadplayer
+	ld de,pt3plrsize : ld hl,(gpsettings.usept3) : call loadplayer
+	ld de,vgmplrsize : ld hl,(gpsettings.usevgm) : call loadplayer
+	ld de,moonmidsize : ld hl,(gpsettings.usemoonmid) : call loadplayer
+	call closestream_file
+	ld a,(playercount)
+	dec a
+	ld hl,noplayersloadedstr
+	ret m
+	xor a
+	ret
+
+isbomgemoon
+;output: zf=0 is BomgeMoon flag is set
+	ld hl,(bomgemoonsettings)
+	ld a,l
+	or h
+	ret z
+	ld a,(hl)
+	cp '0'
+	ret
+
+detectmoonsound
+	ld hl,detectingmoonsoundstr
+	call print_hl
+	call ismoonsoundpresent
+	ld hl,notfoundstr
+	jp nz,print_hl
+	call opl4init
+	call isbomgemoon
+	jr z,.detectwaveports
+	ld hl,devicebomgemoon
+	ld (devicelist.moonsoundstraddr),hl
+	ld a,1
+	ld (gpsettings.moonsoundstatus),a
+	ld hl,bomgemoonstr
+	jp print_hl
+.detectwaveports
+	ld bc,9
+	ld d,0
+	ld hl,0x1200
+	ld ix,browserpanel
+	call opl4readmemory
+	ld b,9
+	ld de,rom001200
+	ld hl,gpsettings.moonsoundstatus
+.cmploop
+	ld a,(de)
+	cp (ix)
+	jr nz,.waveportsfailed
+	inc de
+	inc ix
+	djnz .cmploop
+	ld (hl),2
+	ld hl,foundstr
+	jp print_hl
+.waveportsfailed
+	ld (hl),1
+	ld hl,firmwareerrorstr
+	call print_hl
+	ld hl,pressanykeystr
+	call print_hl
+	YIELDGETKEYLOOP
+	ret
+
+detecttfm
+	ld hl,detectingtfmstr
+	call print_hl
+	call istfmpresent
+	ld hl,notfoundstr
+	jp nz,print_hl
+	ld a,1
+	ld (gpsettings.tfmstatus),a
+	ld hl,foundstr
+	jp print_hl
+
+trywritingopm
+	dec a
+	jr nz,$-1
+	ld bc,OPM0_REG
+	out (c),e
+	ld bc,OPM1_REG
+	out (c),e
+	dec a
+	jr nz,$-1
+	ld bc,OPM0_DAT
+	out (c),d
+	ld bc,OPM1_DAT
+	out (c),d
+	ret
+
+detectopm
+	ld hl,detectingopmstr
+	call print_hl
+;check for non-zero as an early exit condition
+	ld bc,OPM0_DAT
+	in a,(c)
+	or a
+	ld hl,notfoundstr
+	jp nz,print_hl
+;start timer
+	ld de,0xff12
+	call trywritingopm
+	ld de,0x2a14
+	call trywritingopm
+;wait for the timer to finish
+	YIELD
+	YIELD
+;check the timer flags
+	ld bc,OPM0_DAT
+	in a,(c)
+	cp 2
+	ld hl,notfoundstr
+	jp nz,print_hl
+	ld bc,OPM1_DAT
+	in a,(c)
+	cp 2
+	ld hl,founddualchipstr
+	jr z,.hasdualopm
+	call opmdisablechip1
+	ld hl,foundstr
+	ld a,1
+.hasdualopm
+	ld (gpsettings.opmstatus),a
+	call print_hl
+	jp opmstoptimers
+
+trywritingopna1
+	dec a
+	jr nz,$-1
+	ld bc,OPNA1_REG
+	out (c),e
+	dec a
+	jr nz,$-1
+	ld bc,OPNA1_DAT
+	out (c),d
+	ret
+
+detectopna
+	ld hl,detectingopnastr
+	call print_hl
+;check for non-zero as an early exit condition
+	ld bc,OPNA1_REG
+	in a,(c)
+	or a
+	ld hl,notfoundstr
+	jp nz,print_hl
+	ld de,0xff26
+	call trywritingopna1
+	ld de,0x2a27
+	call trywritingopna1
+;wait for the timer to finish
+	YIELD
+	YIELD
+;check the timer flags
+	ld bc,OPNA1_REG
+	in a,(c)
+	cp 2
+	ld hl,notfoundstr
+;	jp nz,print_hl
+	ld a,1
+	ld (gpsettings.opnastatus),a
+	ld de,0x3027
+	call trywritingopna1
+	ld de,0x0027
+	call trywritingopna1
+	ld hl,foundstr
+	jp print_hl
+
+loadsettings
+	ld de,settingsfilename
+	call openstream_file
+	or a
+	ret nz
+	ld de,browserpanel
+	ld hl,0x4000
+	call readstream_file
+	ld de,browserpanel
+	add hl,de
+	ld (hl),0
+	call closestream_file
+	ld de,browserpanel
+.parseloop
+	ld bc,'='*256
+	call findnextchar
+	or a
+	ret z
+	cp b
+	jr nz,.parseloop
+	ld b,settingsvarcount
+	ld hl,settingsvars
+.varsearchloop
+	ld a,(hl)
+	inc hl
+	cp c
+	jr z,.foundvar
+	inc hl
+	inc hl
+	djnz .varsearchloop
+	jr .nextvar
+.foundvar
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a
+	ld (hl),e
+	inc hl
+	ld (hl),d
+.nextvar
+	ld b,0
+	call findnextchar
+	or a
+	jr nz,.parseloop
+	ret
+
+findnextchar
+;de = ptr
+;b = character to search
+;c = LRC
+;output: de = ptr past character, c = updated LRC
+	ld a,(de)
+	inc de
+	or a
+	ret z
+	cp "\n"
+	ret z
+	cp b
+	ret z
+	xor c
+	ld c,a
+	jr findnextchar
+
+>>>>>>> f39a963bd4664e19a3f5d5832b2a7357a765e638
 gpsettings GPSETTINGS
 bomgemoonsettings dw 0
 
@@ -1293,6 +1609,7 @@ settingsvars
 	db 0x7F : dw gpsettings.moonmoddefaultpanning
 	db 0x7A : dw gpsettings.midiuartdelayoverride
 	db 0x61 : dw bomgemoonsettings
+	db 0x20 : dw gpsettings.usemoonmid
 settingsvarcount=($-settingsvars)/3
 
 getfileextension
@@ -1635,10 +1952,15 @@ pagSysStart:
 pagSysEnd:
 mainend
 
+<<<<<<< HEAD
 	display "gpsys = ",/d,pagSysEnd-pagSysStart," bytes"
 	savebin "gp.com",mainbegin,mainend-mainbegin
 
         org tempmemorya
+=======
+	savebin "gp.com",mainbegin,mainend-mainbegin
+
+>>>>>>> f39a963bd4664e19a3f5d5832b2a7357a765e638
 playerpages
 	ds MAX_NUM_PLAYERS
 filinfo
@@ -1671,6 +1993,38 @@ playlistchanged ds 1
 
 	assert $ <= 0x3e00 ;reserve 512 bytes for stack
 
+<<<<<<< HEAD
 
 
 	
+=======
+	org 0
+modstart
+	incbin "moonmod.bin"
+modplrsize=$-modstart
+mwmstart
+	incbin "mwm.bin"
+mwmplrsize=$-mwmstart
+mp3start
+	incbin "mp3.bin"
+mp3plrsize=$-mp3start
+pt3start
+	incbin "pt3.bin"
+pt3plrsize=$-pt3start
+vgmstart
+	incbin "vgm.bin"
+vgmplrsize=$-vgmstart
+plrpart1size=$
+
+	savebin "gp1.plr",0,plrpart1size
+
+	org 0
+moonmidstart
+	incbin "mp3.bin"
+moonmidsize=$-moonmidstart
+plrpart2size=$
+
+	savebin "gp2.plr",0,plrpart2size
+
+plrfilesize=plrpart1size+plrpart2size
+>>>>>>> f39a963bd4664e19a3f5d5832b2a7357a765e638

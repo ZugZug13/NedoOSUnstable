@@ -32,6 +32,7 @@ usemwm dw 0
 usept3 dw 0
 usevgm dw 0
 usemoonmod dw 0
+usemoonmid dw 0
 framelength dw 0 ;in 42 t-states units
 moonmoddefaultpanning dw 0
 midiuartdelayoverride dw 0
