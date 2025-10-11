@@ -1,7 +1,15 @@
-﻿        org GP_SYSPG_ADDR
+﻿init:
+	ld de,currentfolder
+	OS_GETPATH
+	ld hl,(currentfolder+2)
+	ld a,l
+	xor '/'
+	or h
+	jr nz,$+5
+	ld (currentfolder+2),a
+	
+	OS_SETSYSDRV
 
-pagSysStart:
-init:
         call loadsettings
 	call detectcpuspeed
 	call detectmoonsound
@@ -429,4 +437,3 @@ istfmpresent
 defaultGpIni:
         incbin "gp.ini"
 defaultGpIniEnd:
-pagSysEnd:

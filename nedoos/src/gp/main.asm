@@ -45,26 +45,10 @@ mainbegin
 	ld d,b
 	call closeexistingplayer
 
-	ld de,currentfolder
-	OS_GETPATH
-	ld hl,(currentfolder+2)
-	ld a,l
-	xor '/'
-	or h
-	jr nz,$+5
-	ld (currentfolder+2),a
-	
-	OS_SETSYSDRV
-
-	ld de,gpsysfile  
-	call openstream_file
-	or a
-	ld hl,gpsysloaderrorstr
-	jp nz,printerrorandexit
-	ld hl,0x4000 ;len
-	ld de,GP_SYSPG_ADDR ;addr
-	call readstream_file
-	call closestream_file
+	ld hl,pagSysStart
+	ld de,GP_SYSPG_ADDR
+	ld bc,pagSysEnd-pagSysStart
+	ldir
 
 	call init	
 	
@@ -1727,9 +1711,17 @@ isplayer
 	ret
 
 
-
+tempmemorya = $
+pagSysStart:
+        DISP GP_SYSPG_ADDR
+        include "gpsys.asm"
+        ENT
+pagSysEnd:
 mainend
 
+	savebin "gp.com",mainbegin,mainend-mainbegin
+
+        org tempmemorya
 playerpages
 	ds NUM_PLAYERS
 filinfo
@@ -1762,13 +1754,8 @@ playlistchanged ds 1
 
 	assert $ <= 0x3e00 ;reserve 512 bytes for stack
 
-	savebin "gp.com",mainbegin,mainend-mainbegin
 
 
-
-
-         include "gpsys.asm"
-    savebin "gp.sys",pagSysStart,pagSysEnd-pagSysStart
 
 	org 0x0000
 
