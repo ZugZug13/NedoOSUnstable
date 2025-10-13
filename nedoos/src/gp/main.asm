@@ -11,7 +11,7 @@ FILE_NAME_OFFSET = FILE_DISPLAY_INFO_OFFSET+FILE_DISPLAY_INFO_SIZE
 FILE_NAME_SIZE = SFN_SIZE
 FILE_ATTRIB_OFFSET = FILE_NAME_OFFSET+FILE_NAME_SIZE
 FILE_ATTRIB_SIZE = 1
-BROWSER_FILE_COUNT = 138
+BROWSER_FILE_COUNT = 175
 PLAYLIST_FILE_COUNT = 40
 PANELCOLOR = 0x4f
 CURSORCOLOR = 0x28
@@ -26,46 +26,36 @@ FILE_ATTRIB_PARENT_DIR = 0
 FILE_ATTRIB_DRIVE = 1
 FILE_ATTRIB_FOLDER = 2
 PLAYLIST_VERSION = 1
-
-GP_SYSPG_ADDR  = 0x8000
+STARTUP_CODE_ADDR  = 0x8000
 
 	org PROGSTART
-
 mainbegin
 	ld sp,0x4000
 	OS_HIDEFROMPARENT
 	call turnturboon
 	ld e,7
 	OS_CLS
-
-	OS_GETMAINPAGES ;out: d,e,h,l=pages in 0000,4000,8000,c000, c=flags, b=id
-	ld (gpsettings.sharedpages),hl
-	ld a,e
-	ld (gpsettings.sharedpages+2),a
-	ld d,b
-	call closeexistingplayer
-
-	ld hl,pagSysStart
-	ld de,GP_SYSPG_ADDR
-	ld bc,pagSysEnd-pagSysStart
+;startup
+	ld hl,startupcode
+	ld de,STARTUP_CODE_ADDR
+	ld bc,startupcodesize
 	ldir
-
-	call init	
+	call startup
+;load players from low memory
 	call loadplayers
 	jp nz,printerrorandexit
-	
+;init panels	
 	ld ix,browserpanel
 	call clearpanel
 	ld ix,playlistpanel
 	call clearpanel
 	or 255 ;set zf=0
 	call setcurrentpanel
-
 	ld de,defaultplaylistfilename
 	call loadplaylist
 	xor a
 	ld (playlistchanged),a
-
+;parse command line
 	ld hl,COMMANDLINE
 	call skipword_hl
 	call skipspaces_hl
@@ -88,7 +78,6 @@ mainbegin
 	call drawui
 	pop af
 	call c,startplaying
-
 playloop
 isplaying=$+1
 	ld a,0
@@ -97,7 +86,6 @@ isplaying=$+1
 	call musicplay
 	call z,playnextfile
 	call updateprogressbar
-
 checkmsgs
 	ld a,(COMMANDLINE)
 	or a
@@ -1127,6 +1115,10 @@ noplayersloadedstr
 	db "Unable to load any players!",0
 playersloaderrorstr
 	db "Failed to load gp/gp.plr from OS folder!",0
+initializing1str
+	db "Initializing ",0
+initializing2str
+	db "...",0
 chdirfailedstr
 	db "Unable to change directory!",0
 playliststr
@@ -1137,48 +1129,12 @@ playing1str
 	db "...",0
 deviceseparatorstr
 	db " and ",0
-closingplayerstr
-	db "Closing old player instance...\r\n",0
 emptystr
 	db 0
-initializing1str
-	db "Initializing ",0
-initializing2str
-	db "...",0
-detectingmoonsoundstr
-	db "Detecting MoonSound...",0
-detectingtfmstr
-	db "Detecting TurboSound FM...",0
-detectingopmstr
-	db "Detecting YM2151...",0
-detectingopnastr
-	db "Detecting YM2608...",0
-notfoundstr
-	db "no device!\r\n",0
-foundstr
-	db "found!\r\n",0
-bomgemoonstr
-	db "OPL3\r\n",0
-founddualchipstr
-	db "2x\r\n",0
-detectingcpustr
-	db "Running on...",0
-cpufpgastr
-	db "FPGA\r\n",0
-cpuevostr
-	db "ZX Evolution\r\n",0
-cpuatmstr
-	db "ATM\r\n",0
-rom001200
-	db "Copyright"
 loadingstr
 	db "LOADING...",0
 errorwindowheaderstr
 	db "Error",0
-firmwareerrorstr
-	db "firmware problem!\r\nPlease update ZXM-MoonSound firmware to revision 1.01\r\n"
-	db "https://www.dropbox.com/s/1e0b2197emrhzos/zxm_moonsound01_frm0101.zip\r\n"
-	db "Or set BomgeMoon=1 in bin\\gp\\gp.ini to skip OPL4 ports detection.",0
 hotkeystr
 	db "Arrows=Navigate  Enter=Play  Tab=Panel  Space=Add/Remove  S=Save Playlist",0
 drivedata
@@ -1283,6 +1239,7 @@ loadplayer
 	ld a,e
 	ld (.playerpage),a
 	SETPG4000
+	call setsharedpages
 	ld de,0x4000
 .codesize=$+1
 	ld hl,0
@@ -1360,20 +1317,9 @@ loadplayers
 	ret m
 	xor a
 	ret
+
 gpsettings GPSETTINGS
 bomgemoonsettings dw 0
-
-settingsvars
-	db 0x19 : dw gpsettings.usemp3
-	db 0x14 : dw gpsettings.usemwm
-	db 0x74 : dw gpsettings.usept3
-	db 0x1F : dw gpsettings.usevgm
-	db 0x26 : dw gpsettings.usemoonmod
-	db 0x7F : dw gpsettings.moonmoddefaultpanning
-	db 0x7A : dw gpsettings.midiuartdelayoverride
-	db 0x61 : dw bomgemoonsettings
-	db 0x20 : dw gpsettings.usemoonmid
-settingsvarcount=($-settingsvars)/3
 
 getfileextension
 ;hl = file name
@@ -1426,13 +1372,17 @@ findsupportedplayer
 	dec b ;set zf=0
 	ret
 
-createfileslist
-	ld de,emptystr
-	OS_OPENDIR
+setsharedpages
 	ld a,(gpsettings.sharedpages)
 	SETPG8000
 	ld a,(gpsettings.sharedpages+1)
 	SETPGC000
+	ret
+
+createfileslist
+	ld de,emptystr
+	OS_OPENDIR
+	call setsharedpages
 	xor a
 	ld (browserpanel.currentfileindex),a
 	ld (browserpanel.firstfiletoshow),a
@@ -1627,11 +1577,9 @@ isfilesupported jumpindirect ISFILESUPPORTEDPROCADDR
 
 	include "../_sdk/file.asm"
 	include "common/radixsort.asm"
-	include "common/opl4.asm"
-	include "common/opn.asm"
-	include "common/opm.asm"
-	include "common/opna.asm"
+	include "common/turbo.asm"
 
+<<<<<<< HEAD
 
 
 closeexistingplayer
@@ -1713,12 +1661,24 @@ pagSysStart:
         include "gpsys.asm"
         ENT
 pagSysEnd:
+=======
+tempmemorystart = $
+startupcode
+	disp STARTUP_CODE_ADDR
+	include "startup.asm"
+	ent
+startupcodesize=$-startupcode
+>>>>>>> master
 mainend
 
-	display "gpsys = ",/d,pagSysEnd-pagSysStart," bytes"
+;	display "gpsys = ",/d,startupcodesize," bytes"
 	savebin "gp.com",mainbegin,mainend-mainbegin
 
+<<<<<<< HEAD
 	org tempmemorya
+=======
+	org tempmemorystart
+>>>>>>> master
 playerpages
 	ds NUM_PLAYERS
 filinfo

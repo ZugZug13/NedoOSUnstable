@@ -1,4 +1,17 @@
-﻿init:
+; One-time initialization code, not retained after startup is complete.
+
+	include "common/opl4.asm"
+	include "common/opn.asm"
+	include "common/opm.asm"
+	include "common/opna.asm"
+
+startup
+	OS_GETMAINPAGES ;out: d,e,h,l=pages in 0000,4000,8000,c000, c=flags, b=id
+	ld (gpsettings.sharedpages),hl
+	ld a,e
+	ld (gpsettings.sharedpages+2),a
+	ld d,b
+	call closeexistingplayer
 	ld de,currentfolder
 	OS_GETPATH
 	ld hl,(currentfolder+2)
@@ -7,22 +20,19 @@
 	or h
 	jr nz,$+5
 	ld (currentfolder+2),a
-	
 	OS_SETSYSDRV
-
-        call loadsettings
+	call loadsettings
 	call detectcpuspeed
 	call detectmoonsound
 	call detecttfm
 	call detectopm
 	jp detectopna
 
-
 loadsettings
 	ld de,settingsfilename
 	call openstream_file
 	or a
-        ret nz
+	ret nz
 	ld de,browserpanel
 	ld hl,0x4000
 	call readstream_file
@@ -64,6 +74,18 @@ loadsettings
 	jr nz,.parseloop
 	ret
 
+settingsvars
+	db 0x19 : dw gpsettings.usemp3
+	db 0x14 : dw gpsettings.usemwm
+	db 0x74 : dw gpsettings.usept3
+	db 0x1F : dw gpsettings.usevgm
+	db 0x26 : dw gpsettings.usemoonmod
+	db 0x7F : dw gpsettings.moonmoddefaultpanning
+	db 0x7A : dw gpsettings.midiuartdelayoverride
+	db 0x61 : dw bomgemoonsettings
+	db 0x20 : dw gpsettings.usemoonmid
+settingsvarcount=($-settingsvars)/3
+
 findnextchar
 ;de = ptr
 ;b = character to search
@@ -80,8 +102,6 @@ findnextchar
 	xor c
 	ld c,a
 	jr findnextchar
-
-
 
 detectcpuspeed
 	ld hl,detectingcpustr
@@ -151,8 +171,6 @@ lightweightinterrupthandler
 	pop af
 	ei
 	ret
-
-
 
 isbomgemoon
 ;output: zf=0 is BomgeMoon flag is set
@@ -301,7 +319,7 @@ detectopna
 	in a,(c)
 	cp 2
 	ld hl,notfoundstr
-;	jp nz,print_hl 
+	jp nz,print_hl 
 	ld a,1
 	ld (gpsettings.opnastatus),a
 	ld de,0x3027
@@ -311,7 +329,6 @@ detectopna
 	ld hl,foundstr
 	jp print_hl
 
-;=====================================
 trywritingmoonsoundfm1
 	djnz $
 	ld a,e
@@ -391,3 +408,108 @@ istfmpresent
 	call trywritingtfm1
 	xor a
 	ret
+
+closeexistingplayer
+;d = current pid
+	ld e,1
+.searchloop
+	ld a,e
+	cp d
+	jr z,.nextprocess
+	push de
+	OS_GETAPPMAINPAGES ;d,e,h,l=pages in 0000,4000,8000,c000
+	or a
+	ld a,d
+	pop de
+	jr nz,.nextprocess
+	push de
+	SETPGC000
+	ld hl,0xc000+COMMANDLINE
+	ld de,fullpathbuffer
+	ld bc,COMMANDLINE_sz
+	ldir
+	ld hl,fullpathbuffer
+	call skipword_hl
+	ld (hl),0
+	ld hl,fullpathbuffer
+	ld c,'/'
+	call findlastchar ;out: de = after last slash or start
+	call isplayer
+	pop de
+	jr z,.foundplayer
+.nextprocess
+	inc e
+	ld a,e
+	inc a
+	jr nz,.searchloop
+	ret
+.foundplayer
+	xor a
+	ld (0xc000+COMMANDLINE),a
+	push de
+	ld hl,closingplayerstr
+	call print_hl
+	pop de
+.waitloop
+	push de
+	YIELD
+	YIELD
+	YIELD
+	YIELD
+	OS_GETAPPMAINPAGES
+	pop de
+	or a
+	jr z,.waitloop
+	ret
+
+isplayer
+;de = command line file name
+;out: zf=1 if gp, zf=0 otherwise
+	ld a,(de)
+	call tolower
+	cp 'g'
+	ret nz
+	inc de
+	ld a,(de)
+	call tolower
+	cp 'p'
+	ret nz
+	inc de
+	ld a,(de)
+	or a
+	ret z
+	cp '.'
+	ret
+
+closingplayerstr
+	db "Closing old player instance...\r\n",0
+detectingmoonsoundstr
+	db "Detecting MoonSound...",0
+detectingtfmstr
+	db "Detecting TurboSound FM...",0
+detectingopmstr
+	db "Detecting YM2151...",0
+detectingopnastr
+	db "Detecting YM2608...",0
+notfoundstr
+	db "no device!\r\n",0
+foundstr
+	db "found!\r\n",0
+bomgemoonstr
+	db "OPL3\r\n",0
+founddualchipstr
+	db "2x\r\n",0
+detectingcpustr
+	db "Running on...",0
+cpufpgastr
+	db "FPGA\r\n",0
+cpuevostr
+	db "ZX Evolution\r\n",0
+cpuatmstr
+	db "ATM\r\n",0
+rom001200
+	db "Copyright"
+firmwareerrorstr
+	db "firmware problem!\r\nPlease update ZXM-MoonSound firmware to revision 1.01\r\n"
+	db "https://www.dropbox.com/s/1e0b2197emrhzos/zxm_moonsound01_frm0101.zip\r\n"
+	db "Or set BomgeMoon=1 in bin\\gp\\gp.ini to skip OPL4 ports detection.",0

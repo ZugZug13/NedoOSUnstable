@@ -223,6 +223,7 @@ playerdeinit
 	include "common/opn.asm"
 	include "common/opm.asm"
 	include "common/opna.asm"
+	include "common/turbo.asm"
 	include "vgm/opn.asm"
 	include "vgm/opm.asm"
 	include "vgm/ssg.asm"
