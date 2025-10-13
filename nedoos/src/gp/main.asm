@@ -1299,17 +1299,12 @@ loadplayers
 ;load players from file
 	xor a
 	ld (playercount),a
-	
-	
 	ld de,modplrsize : ld hl,(gpsettings.usemoonmod) : call loadplayer
 	ld de,mwmplrsize : ld hl,(gpsettings.usemwm) : call loadplayer
 	ld de,mp3plrsize : ld hl,(gpsettings.usemp3) : call loadplayer	
 	ld de,moonmidsize : ld hl,(gpsettings.usemoonmid) : call loadplayer
-	
 	ld de,pt3plrsize : ld hl,(gpsettings.usept3) : call loadplayer
 	ld de,vgmplrsize : ld hl,(gpsettings.usevgm) : call loadplayer
-	
-	
 	call closestream_file
 	ld a,(playercount)
 	dec a
@@ -1579,106 +1574,17 @@ isfilesupported jumpindirect ISFILESUPPORTEDPROCADDR
 	include "common/radixsort.asm"
 	include "common/turbo.asm"
 
-<<<<<<< HEAD
-
-
-closeexistingplayer
-;d = current pid
-	ld e,1
-.searchloop
-	ld a,e
-	cp d
-	jr z,.nextprocess
-	push de
-	OS_GETAPPMAINPAGES ;d,e,h,l=pages in 0000,4000,8000,c000
-	or a
-	ld a,d
-	pop de
-	jr nz,.nextprocess
-	push de
-	SETPGC000
-	ld hl,0xc000+COMMANDLINE
-	ld de,0x8000
-	ld bc,COMMANDLINE_sz
-	ldir
-	ld hl,0x8000
-	call skipword_hl
-	ld (hl),0
-	ld hl,0x8000
-	ld c,'/'
-	call findlastchar ;out: de = after last slash or start
-	call isplayer
-	pop de
-	jr z,.foundplayer
-.nextprocess
-	inc e
-	ld a,e
-	inc a
-	jr nz,.searchloop
-	ret
-.foundplayer
-	xor a
-	ld (0xc000+COMMANDLINE),a
-	push de
-	ld hl,closingplayerstr
-	call print_hl
-	pop de
-.waitloop
-	push de
-	YIELD
-	YIELD
-	YIELD
-	YIELD
-	OS_GETAPPMAINPAGES
-	pop de
-	or a
-	jr z,.waitloop
-	ret
-
-isplayer
-;de = command line file name
-;out: zf=1 if gp, zf=0 otherwise
-	ld a,(de)
-	call tolower
-	cp 'g'
-	ret nz
-	inc de
-	ld a,(de)
-	call tolower
-	cp 'p'
-	ret nz
-	inc de
-	ld a,(de)
-	or a
-	ret z
-	cp '.'
-	ret
-
-
-tempmemorya = $
-pagSysStart:
-        DISP GP_SYSPG_ADDR
-        include "gpsys.asm"
-        ENT
-pagSysEnd:
-=======
 tempmemorystart = $
 startupcode
 	disp STARTUP_CODE_ADDR
 	include "startup.asm"
 	ent
 startupcodesize=$-startupcode
->>>>>>> master
 mainend
 
-;	display "gpsys = ",/d,startupcodesize," bytes"
 	savebin "gp.com",mainbegin,mainend-mainbegin
 
-<<<<<<< HEAD
-	org tempmemorya
-=======
 	org tempmemorystart
->>>>>>> master
 playerpages
 	ds NUM_PLAYERS
 filinfo
