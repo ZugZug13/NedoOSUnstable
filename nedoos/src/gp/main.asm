@@ -1342,12 +1342,17 @@ loadplayers
 ;load players from file
 	xor a
 	ld (playercount),a
+	
+	
 	ld de,modplrsize : ld hl,(gpsettings.usemoonmod) : call loadplayer
 	ld de,mwmplrsize : ld hl,(gpsettings.usemwm) : call loadplayer
-	ld de,mp3plrsize : ld hl,(gpsettings.usemp3) : call loadplayer
+	ld de,mp3plrsize : ld hl,(gpsettings.usemp3) : call loadplayer	
+	ld de,moonmidsize : ld hl,(gpsettings.usemoonmid) : call loadplayer
+	
 	ld de,pt3plrsize : ld hl,(gpsettings.usept3) : call loadplayer
 	ld de,vgmplrsize : ld hl,(gpsettings.usevgm) : call loadplayer
-	ld de,moonmidsize : ld hl,(gpsettings.usemoonmid) : call loadplayer
+	
+	
 	call closestream_file
 	ld a,(playercount)
 	dec a
@@ -1701,6 +1706,7 @@ isplayer
 	cp '.'
 	ret
 
+
 tempmemorya = $
 pagSysStart:
         DISP GP_SYSPG_ADDR
@@ -1712,7 +1718,7 @@ mainend
 	display "gpsys = ",/d,pagSysEnd-pagSysStart," bytes"
 	savebin "gp.com",mainbegin,mainend-mainbegin
 
-  org tempmemorya
+        org tempmemorya
 playerpages
 	ds NUM_PLAYERS
 filinfo
@@ -1755,20 +1761,19 @@ mwmplrsize=$-mwmstart
 mp3start
 	incbin "mp3.bin"
 mp3plrsize=$-mp3start
+moonmidstart
+	incbin "moonmid.bin"
+moonmidsize=$-moonmidstart
+plrpart1size=$
+	savebin "gp1.plr",0,plrpart1size
+
+	org 0
 pt3start
 	incbin "pt3.bin"
 pt3plrsize=$-pt3start
 vgmstart
 	incbin "vgm.bin"
 vgmplrsize=$-vgmstart
-plrpart1size=$
-
-	savebin "gp1.plr",0,plrpart1size
-
-	org 0
-moonmidstart
-	incbin "mp3.bin"
-moonmidsize=$-moonmidstart
 plrpart2size=$
 
 	savebin "gp2.plr",0,plrpart2size
