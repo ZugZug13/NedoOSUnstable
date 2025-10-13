@@ -1718,7 +1718,7 @@ mainend
 	display "gpsys = ",/d,pagSysEnd-pagSysStart," bytes"
 	savebin "gp.com",mainbegin,mainend-mainbegin
 
-        org tempmemorya
+	org tempmemorya
 playerpages
 	ds NUM_PLAYERS
 filinfo

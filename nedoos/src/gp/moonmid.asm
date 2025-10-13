@@ -75,7 +75,10 @@ opl4tablespage=$+1
 	ret	
 	
 musicload:	
-	jp midloadfile
+	call midloadfile
+	xor a
+	ld hl,DEVICE_MOONSOUND_MASK
+	ret
 
 musicunload
 	jp midunload	
@@ -183,19 +186,15 @@ midloadfile
 	call set_refresh
 ;	call opl4_reset
 	call opl4init
-    call generate_tables
-	xor a
-	ret	
-	
-	
-	
-	
+    jp generate_tables	
 	
 midunload
 	call opl4_reset
 	call opl4mute
 	jp memorystreamfree
 ;<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+	include "moonmid/pitch_table.asm"
+	
 playernamestr
 	db "MoonSound MIDI",0
 outofmemorystr
@@ -209,7 +208,6 @@ tempmemorystart = $
 opl4tables
 	DISP 0xc000
 	include "moonmid/yrw801imap_robo.asm"
-	include "moonmid/pitch_table.asm"
 	ENT	
 opl4tables_end
 end
