@@ -1582,6 +1582,7 @@ startupcode
 startupcodesize=$-startupcode
 mainend
 
+;	display "gpsys = ",/d,startupcodesize," bytes"
 	savebin "gp.com",mainbegin,mainend-mainbegin
 
 	org tempmemorystart

@@ -180,8 +180,8 @@ midloadfile
 	jp nz,memorystreamfree ;sets zf=0
 	call rewind
 	
-	;call midsetprogressdelta
-	;call rewind
+	call midsetprogressdelta
+	call rewind
 	
 	call set_refresh
 ;	call opl4_reset

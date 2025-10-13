@@ -197,8 +197,8 @@ midplay:
 			ld (g_MIDI_counter+2),hl
 			ex de,hl
 
-													;call midgetprogress	
-													;call updateprogress
+			call midgetprogress	
+			call updateprogress
 
 
 ;iterate through the tracks
@@ -1664,7 +1664,7 @@ midsetprogressdelta
 			call memorystreamseek
 .eventloop
 			call midadvancetrack
-			bit 7,(ix+TRACK_DATA.track_finished+3)
+			bit 7,(ix+TRACK_DATA.track_finished)
 			jr z,.eventloop
 			ld hl,(ix+TRACK_DATA.waiting_for+0)
 			ld de,(ix+TRACK_DATA.waiting_for+2)
@@ -1682,5 +1682,114 @@ midsetprogressdelta
 midadvancetrack
 ;ix = track
 		ld hl,(memorystreamcurrentaddr)
-		;process_midi_event < >,< >,< >
-	ret
+		memory_stream_read_byte b
+		bit 7,b
+		jr z,.gotdatabyte
+		ld (ix+TRACK_DATA.last_command),b
+		memory_stream_read_byte d
+		jr .handlecommand
+.gotdatabyte
+		ld d,b
+		ld b,(ix+TRACK_DATA.last_command)
+.handlecommand
+		ld a,b
+		rrca
+		rrca
+		rrca
+		rrca
+		and 7
+		ld c,a
+		add a,a
+		add a,c
+		ld (.commandtable),a
+.commandtable=$+1
+		jr $
+		jp .send3 ; 8 Note Off
+		jp .send3 ; 9 Note On
+		jp .send3 ; A Polyphonic Pressure
+		jp .send3 ; B Control Change	
+		jp .send2 ; C Program Change
+		jp .send2 ; D Channel Pressure
+		jp .send3 ; E Pitch Bend
+;;;;;;;;;;;;;;;;;;; F System
+		ld a,b
+		cp 0xff
+		jp z,.handlemeta
+		cp 0xf0
+		jp nz,.finalize
+		call midreadvarint
+		ld d,0xf0
+;		call_send_byte
+.sendloop
+		memory_stream_read_byte e
+		ld d,e
+;		call_send_byte
+		ld a,e
+		cp 0xf7
+		jr nz,.sendloop
+		ld (memorystreamcurrentaddr),hl
+		jr .finalize
+.handlemeta
+		ld a,d
+		cp 0x2f
+		jr z,.markdone
+		cp 0x51
+		jr z,.setduration
+		call midreadvarint
+		ld a,e
+		or d
+		jr z,.finalize
+		ld a,e
+		dec de
+		inc d
+		ld c,d
+		ld b,a
+.skiploop
+		bit 6,h
+		call nz,memorystreamnextpage
+		inc hl
+		djnz .skiploop
+		dec c
+		jr nz,.skiploop
+		ld (memorystreamcurrentaddr),hl
+		jr .finalize
+.markdone
+		set 7,(ix+TRACK_DATA.track_finished)
+		ret
+.setduration
+		call midreadvarint
+		memory_stream_read_byte a
+		memory_stream_read_byte d
+		memory_stream_read_byte e
+		ld (memorystreamcurrentaddr),hl
+		ex de,hl
+		ld e,a
+		ld d,0
+		push ix
+		call setticksperupdate
+		pop ix
+		jr .finalize
+.send2	ld (memorystreamcurrentaddr),hl
+		ld l,d
+		ld h,b
+;		call_send_2
+	jr .finalize
+.send3	memory_stream_read_byte e
+		ld (memorystreamcurrentaddr),hl
+		ex de,hl
+		ld d,b
+;		call_send_3
+.finalize
+		ld hl,(memorystreamcurrentaddr)
+		call midreadvarint
+		ld (memorystreamcurrentaddr),hl
+		ld b,0
+		sla de : rl bc
+		sla de : rl bc
+		ld hl,(ix+TRACK_DATA.waiting_for+0)
+		add hl,de
+		ld (ix+TRACK_DATA.waiting_for+0),hl
+		ld hl,(ix+TRACK_DATA.waiting_for+2)
+		adc hl,bc
+		ld (ix+TRACK_DATA.waiting_for+2),hl
+		ret	
