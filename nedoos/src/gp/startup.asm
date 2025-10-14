@@ -84,6 +84,7 @@ settingsvars
 	db 0x7A : dw gpsettings.midiuartdelayoverride
 	db 0x61 : dw bomgemoonsettings
 	db 0x20 : dw gpsettings.usemoonmid
+	db 0x4C : dw gpsettings.forcemididevice
 settingsvarcount=($-settingsvars)/3
 
 findnextchar
@@ -228,7 +229,11 @@ detectmoonsound
 detecttfm
 	ld hl,detectingtfmstr
 	call print_hl
-	call istfmpresent
+	call turnturbooff
+	call istfmpresent_notimer
+	push af
+	call turnturboon
+	pop af
 	ld hl,notfoundstr
 	jp nz,print_hl
 	ld a,1
@@ -380,32 +385,17 @@ trywritingtfm1
 	out (c),d
 	ret
 
-istfmpresent
-;check for non-zero as an early exit condition
+istfmpresent_notimer
 	ld bc,OPN_REG
 	ld a,%11111100
 	out (c),a
-	in a,(c)
-	or a
-	ret nz
-;start timer
-	ld de,0xff26
+	ld de,0xff00
 	call trywritingtfm1
-	ld de,0x2a27
-	call trywritingtfm1
-;wait for the timer to finish
 	YIELD
 	YIELD
-;check the timer flags
 	ld bc,OPN_REG
-	in a,(c)
-	cp 2
-	ret nz
-;there must be TFM in this system
-	ld de,0x3027
-	call trywritingtfm1
-	ld de,0x0027
-	call trywritingtfm1
+	in f,(c)
+	ret m
 	xor a
 	ret
 
