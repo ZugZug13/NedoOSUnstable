@@ -13,6 +13,7 @@ FILE_ATTRIB_OFFSET = FILE_NAME_OFFSET+FILE_NAME_SIZE
 FILE_ATTRIB_SIZE = 1
 BROWSER_FILE_COUNT = 175
 PLAYLIST_FILE_COUNT = 40
+DEFAULTCOLOR = 0x07
 PANELCOLOR = 0x4f
 CURSORCOLOR = 0x28
 PANELFILECOLOR = 0x0f
@@ -79,6 +80,9 @@ mainbegin
 	call drawui
 	pop af
 	call c,startplaying
+	ld hl,mainmsgtable
+	ld (currentmsgtable),hl
+
 playloop
 isplaying=$+1
 	ld a,0
@@ -143,6 +147,7 @@ mainmsghandlers_start
 	db key_pgup      : dw gopageup
 	db key_pgdown    : dw gopagedown
 	db 's'           : dw onhotkeyS
+	db 'o'           : dw onhotkeyO
 mainmsghandlers_end
 
 playmsgtable
@@ -292,6 +297,18 @@ removefromplaylist
 
 exitplayer
 	pop hl
+	call deinitonexit
+;save playlist
+	ld a,255
+	ld (playlistpanel.isinactive),a
+	OS_SETSYSDRV
+	ld de,defaultplaylistfilename
+	ld a,(playlistchanged)
+	or a
+	call nz,saveplaylist
+	QUIT
+
+deinitonexit
 	call stopplaying
 	ld hl,playerpages
 	ld a,(playercount)
@@ -306,15 +323,7 @@ playerdeinitloop
 	pop bc
 	inc hl
 	djnz playerdeinitloop
-;save playlist
-	ld a,255
-	ld (playlistpanel.isinactive),a
-	OS_SETSYSDRV
-	ld de,defaultplaylistfilename
-	ld a,(playlistchanged)
-	or a
-	call nz,saveplaylist
-	QUIT
+	ret
 
 saveplaylist
 ;de = filename
@@ -343,6 +352,13 @@ onhotkeyS
 	call saveplaylist
 	ld de,playlistfilename
 	jp createfilelistandchangesel
+
+onhotkeyO
+	ld hl,runoptionsode
+	ld de,STARTUP_CODE_ADDR
+	ld bc,runoptionsodesize
+	ldir
+	jp runoptions
 
 startplaying
 	call stopplaying
@@ -1031,9 +1047,9 @@ redraw
 drawui
 	call drawbrowserwindow
 	call drawplaylistwindow
-	ld de,0x7
+	ld de,DEFAULTCOLOR
 	OS_SETCOLOR
-	ld de,24*256+3
+	ld de,24*256+1
 	OS_SETXY
 	ld hl,hotkeystr
 	call print_hl
@@ -1102,10 +1118,10 @@ tolower
 
 pressanykeystr
 	db "\r\nPress any key to continue...\r\n",0
+mainfilename
+	db "gp.com",0
 playersfilename
 	db "gp/gp.plr",0
-settingsfilename
-	db "gp/gp.ini",0
 defaultplaylistfilename
 	db "gp/"
 playlistfilename
@@ -1137,7 +1153,7 @@ loadingstr
 errorwindowheaderstr
 	db "Error",0
 hotkeystr
-	db "Arrows=Navigate  Enter=Play  Tab=Panel  Space=Add/Remove  S=Save Playlist",0
+	db "O=Options  Arrows+Tab=Navigate  Enter=Play  Space=Add/Remove  S=Save Playlist",0
 drivedata
 	db "E: - IDE Master p.1                   E:",0,0,0,0,0,0,0,0,0,0,0,FILE_ATTRIB_DRIVE
 	db "F: - IDE Master p.2                   F:",0,0,0,0,0,0,0,0,0,0,0,FILE_ATTRIB_DRIVE
@@ -1316,6 +1332,7 @@ loadplayers
 
 gpsettings GPSETTINGS
 bomgemoonsettings dw 0
+runplayersetup db 0
 
 getfileextension
 ;hl = file name
@@ -1575,6 +1592,36 @@ isfilesupported jumpindirect ISFILESUPPORTEDPROCADDR
 	include "common/radixsort.asm"
 	include "common/turbo.asm"
 
+runoptionsode
+	disp STARTUP_CODE_ADDR
+runoptions
+	OS_SETSYSDRV
+	ld de,mainfilename
+        OS_OPENHANDLE
+	push af
+        ld a,b
+        ld (.filehandle),a
+	pop af
+	or a
+	jp nz,exitplayer
+	ld de,currentfolder
+	OS_CHDIR
+	pop hl
+	call deinitonexit
+	ld de,mainbegin
+	ld hl,mainsize
+.filehandle=$+1
+        ld b,0
+        OS_READHANDLE
+        ld a,(.filehandle)
+        ld b,a
+        OS_CLOSEHANDLE
+	ld a,1
+	ld (runplayersetup),a
+	jp mainbegin
+	ent
+runoptionsodesize=$-1
+
 tempmemorystart = $
 startupcode
 	disp STARTUP_CODE_ADDR
@@ -1582,9 +1629,10 @@ startupcode
 	ent
 startupcodesize=$-startupcode
 mainend
+mainsize=mainend-mainbegin
 
 ;	display "gpsys = ",/d,startupcodesize," bytes"
-	savebin "gp.com",mainbegin,mainend-mainbegin
+	savebin "gp.com",mainbegin,mainsize
 
 	org tempmemorystart
 playerpages
@@ -1606,6 +1654,7 @@ fileslist ds FILE_DATA_SIZE
 
 browserpanel PANEL
 	ds FILE_DATA_SIZE*(BROWSER_FILE_COUNT-1)
+inifilebuffer equ browserpanel
 
 playlistdatastart=$
 playlistpanelversion ds 2

@@ -6,6 +6,8 @@
 	include "common/opna.asm"
 
 startup
+	ld de,DEFAULTCOLOR
+	OS_SETCOLOR
 	OS_GETMAINPAGES ;out: d,e,h,l=pages in 0000,4000,8000,c000, c=flags, b=id
 	ld (gpsettings.sharedpages),hl
 	ld a,e
@@ -21,26 +23,340 @@ startup
 	jr nz,$+5
 	ld (currentfolder+2),a
 	OS_SETSYSDRV
-	call loadsettings
+	call loadandparsesettings
+	call checkinifile
+	call runsetup
 	call detectcpuspeed
 	call detectmoonsound
 	call detecttfm
 	call detectopm
 	jp detectopna
 
-loadsettings
+runsetup
+	ld a,(runplayersetup)
+	or a
+	ret z
+;player setup
+	ld hl,(gpsettings.mididevice)
+	ld de,midioptions
+	ld b,midioptioncount
+	ld a,(hl)
+	and 15
+	call updateradiobuttons
+	ld hl,(gpsettings.moddevice)
+	ld de,modoptions
+	ld b,modoptioncount
+	ld a,(hl)
+	and 15
+	call updateradiobuttons
+	ld hl,(bomgemoonsettings)
+	ld de,bomgemoonoption
+	ld a,(hl)
+	and 1
+	call updatecheckbox
+	call redrawplayersetupui
+	ld hl,playersetupmsgtable
+	ld (currentmsgtable),hl
+	call playloop
+	ld de,DEFAULTCOLOR
+	OS_SETCOLOR
+	ld e,7
+	OS_CLS
+	ret
+
+checkinifile
+	ld hl,(inifileversionsettings)
+	ld a,l
+	or h
+	jr z,.isoutdated
+	ld a,(hl)
+	cp '1'
+	ret z
+.isoutdated
+	ld hl,builtininifile
+	ld de,inifilebuffer
+	ld bc,builtininifilesize
+	ld (inifilesize),bc
+	ldir
+	xor a
+	ld (de),a
+	call parsesettings
+	ld a,1
+	ld (runplayersetup),a
+	ret
+
+playersetupmsgtable
+	db (playersetupmsghandlers_end-playersetupmsghandlers_start)/3
+playersetupmsghandlers_start
+	db key_redraw    : dw redrawplayersetupui
+	db key_esc       : dw exitplayersetup
+	db key_up        : dw goprevoption
+	db key_down      : dw gonextoption
+	db key_enter     : dw setoption
+	db ' '	         : dw setoption
+	db key_tab       : dw gonextfast
+playersetupmsghandlers_end
+
+playersetupoptions
+midioptions
+	dw 0x0405 : dw midioptionhandler : dw midioption1str
+	dw 0x0505 : dw midioptionhandler : dw midioption2str
+	dw 0x0605 : dw midioptionhandler : dw midioption3str
+	dw 0x0705 : dw midioptionhandler : dw midioption4str
+	dw 0x0805 : dw midioptionhandler : dw midioption5str
+	dw 0x0905 : dw midioptionhandler : dw midioption6str
+midioptioncount=($-midioptions)/6
+modoptions
+	dw 0x052f : dw modoptionhandler : dw modoption1str
+	dw 0x062f : dw modoptionhandler : dw modoption2str
+	dw 0x072f : dw modoptionhandler : dw modoption3str
+modoptioncount=($-modoptions)/6
+bomgemoonoption
+	dw 0x0e15 : dw bomgemoonhandler : dw bomgemoonoptionstr
+playersetupoptioncount=($-playersetupoptions)/6
+
+midioption1str db "[X] Auto Select Device        ",0
+midioption2str db "[ ] MoonSound (OPL4)          ",0
+midioption3str db "[ ] NeoGS (VS10x3 Synth)      ",0
+midioption4str db "[ ] UART AY1 (Multisound Old) ",0
+midioption5str db "[ ] UART AY2 (Multisound New) ",0
+midioption6str db "[ ] UART YM2608               ",0
+modoption1str db "[X] Auto Select Device  ",0
+modoption2str db "[ ] MoonSound (OPL4)    ",0
+modoption3str db "[ ] GeneralSound        ",0
+bomgemoonoptionstr
+	db "[ ] OPL3-only Device (BomgeMoon)  ",0
+settingsheaderstr
+	db "Player Settings",0
+setuphotkeysstr
+	db "ESC=Save&Continue  Space=Toggle  Up/Down=Nagivate",0
+mididevicestr
+	db "MIDI Device...",0
+moddevicestr
+	db "MOD Device...",0
+miscoptionstr
+	db "Misc...",0
+
+activeoption db 0
+inifileversionsettings dw 0
+inifilesize dw 0
+
+exitplayersetup
+	pop hl
+	ld de,settingsfilename
+	call openstream_file
+	or a
+	jr z,.openedfile
+	ld de,settingsfilename
+	OS_CREATEHANDLE
+	or a
+	ret nz
+	ld a,b
+	ld (filehandle),a
+.openedfile
+	ld a,(filehandle)
+	ld b,a
+	ld de,inifilebuffer
+	ld hl,(inifilesize)
+	OS_WRITEHANDLE
+	jp closestream_file
+
+updatecheckbox
+;hl = ini address
+;de = option struct
+;a = 0-1 value
+	dec a
+	ld c,a
+	ld b,1
+	ld a,'1'
+	jr updateradiobuttons.updateoptions
+
+updateradiobuttons
+;hl = ini address
+;de = option structs
+;b = option count
+;a = active option
+	ld c,a
+	ld a,'0'
+.updateoptions
+	ld (.basedigit),a
+	ld a,h
+	or l
+	ret z
+	ld a,c
+.basedigit=$+1
+	add a,'0'
+	ld (hl),a
+	ld hl,4
+	add hl,de
+	inc c
+.loop	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc de
+	dec c
+	ld a,'X'
+	jr z,$+4
+	ld a,' '
+	ld (de),a
+	ld de,5
+	add hl,de
+	djnz .loop
+	ret
+
+midioptionhandler
+	ld hl,(gpsettings.mididevice)
+	ld de,midioptions
+	ld b,midioptioncount
+	ld a,(activeoption)
+	sub (midioptions - playersetupoptions)/6
+	call updateradiobuttons
+	jp drawsetupoptions
+
+modoptionhandler
+	ld hl,(gpsettings.moddevice)
+	ld de,modoptions
+	ld b,modoptioncount
+	ld a,(activeoption)
+	sub (modoptions - playersetupoptions)/6
+	call updateradiobuttons
+	jp drawsetupoptions
+
+bomgemoonhandler
+	ld hl,(bomgemoonsettings)
+	ld de,bomgemoonoption
+	ld a,(hl)
+	cpl
+	and 1
+	call updatecheckbox
+	jp drawsetupoptions
+
+setoption
+	ld a,(activeoption)
+	add a,a
+	ld e,a
+	ld d,0
+	ld hl,playersetupoptions+2
+	add hl,de
+	add hl,de
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	ex de,hl
+	jp (hl)
+
+goprevoption
+	ld a,(activeoption)
+	dec a
+	jp p,$+5
+	ld a,playersetupoptioncount-1
+	ld (activeoption),a
+	jp drawsetupoptions
+
+gonextoption
+	ld a,(activeoption)
+	inc a
+	cp playersetupoptioncount
+	jr c,$+3
+	xor a
+	ld (activeoption),a
+	jp drawsetupoptions
+
+gonextfast
+	ld a,(activeoption)
+	add a,3
+	cp playersetupoptioncount
+	jr c,$+3
+	xor a
+	ld (activeoption),a
+	jp drawsetupoptions
+
+redrawplayersetupui
+	ld e,7
+	OS_CLS
+	ld de,DEFAULTCOLOR
+	OS_SETCOLOR
+	ld de,0x00020
+	OS_SETXY
+	ld hl,settingsheaderstr
+	call print_hl
+	ld de,0x180f
+	OS_SETXY
+	ld hl,setuphotkeysstr
+	call print_hl
+	ld de,PANELCOLOR
+	OS_SETCOLOR
+	ld de,0x0304
+	ld bc,0x1e06
+	call drawwindow
+	ld de,0x0306
+	OS_SETXY
+	ld hl,mididevicestr
+	call print_hl
+	ld de,0x042e
+	ld bc,0x1803
+	call drawwindow
+	ld de,0x0430
+	OS_SETXY
+	ld hl,moddevicestr
+	call print_hl
+	ld de,0x0d14
+	ld bc,0x2201
+	call drawwindow
+	ld de,0x0d16
+	OS_SETXY
+	ld hl,miscoptionstr
+	call print_hl
+drawsetupoptions
+	ld hl,playersetupoptions
+	ld b,playersetupoptioncount
+	ld c,0
+.loop	push bc
+	ld a,(activeoption)
+	cp c
+	ld de,CURSORCOLOR
+	jr z,$+5
+	ld de,PANELFILECOLOR
+	push hl
+	OS_SETCOLOR
+	pop hl
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	push hl
+	OS_SETXY
+	pop hl
+	ld de,3
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+	push hl
+	ex de,hl	
+	call print_hl
+	pop hl
+	pop bc
+	inc c
+	djnz .loop
+	ret
+
+loadandparsesettings
 	ld de,settingsfilename
 	call openstream_file
 	or a
 	ret nz
-	ld de,browserpanel
+	ld de,inifilebuffer
 	ld hl,0x4000
 	call readstream_file
-	ld de,browserpanel
+	ld (inifilesize),hl
+	ld de,inifilebuffer
 	add hl,de
 	ld (hl),0
 	call closestream_file
-	ld de,browserpanel
+parsesettings
+	ld de,inifilebuffer
 .parseloop
 	ld bc,'='*256
 	call findnextchar
@@ -74,6 +390,9 @@ loadsettings
 	jr nz,.parseloop
 	ret
 
+settingsfilename
+	db "gp/gp.ini",0
+
 settingsvars
 	db 0x19 : dw gpsettings.usemp3
 	db 0x14 : dw gpsettings.usemwm
@@ -84,7 +403,9 @@ settingsvars
 	db 0x7A : dw gpsettings.midiuartdelayoverride
 	db 0x61 : dw bomgemoonsettings
 	db 0x20 : dw gpsettings.usemoonmid
-	db 0x4C : dw gpsettings.forcemididevice
+	db 0x11 : dw gpsettings.mididevice
+	db 0x7E : dw gpsettings.moddevice
+	db 0x32 : dw inifileversionsettings
 settingsvarcount=($-settingsvars)/3
 
 findnextchar
@@ -202,7 +523,7 @@ detectmoonsound
 	ld bc,9
 	ld d,0
 	ld hl,0x1200
-	ld ix,browserpanel
+	ld ix,playlistpanel
 	call opl4readmemory
 	ld b,9
 	ld de,rom001200
@@ -394,9 +715,8 @@ istfmpresent_notimer
 	YIELD
 	YIELD
 	ld bc,OPN_REG
-	in f,(c)
-	ret m
-	xor a
+	in a,(c)
+	and 128
 	ret
 
 closeexistingplayer
@@ -503,3 +823,7 @@ firmwareerrorstr
 	db "firmware problem!\r\nPlease update ZXM-MoonSound firmware to revision 1.01\r\n"
 	db "https://www.dropbox.com/s/1e0b2197emrhzos/zxm_moonsound01_frm0101.zip\r\n"
 	db "Or set BomgeMoon=1 in bin\\gp\\gp.ini to skip OPL4 ports detection.",0
+
+builtininifile
+	incbin "gp.ini"
+builtininifilesize=$-builtininifile
