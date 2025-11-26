@@ -46,6 +46,7 @@ mainbegin
 ;load players from low memory
 	call loadplayers
 	jp nz,printerrorandexit
+;	YIELDGETKEYLOOP
 ;init panels	
 	ld ix,browserpanel
 	call clearpanel
@@ -302,10 +303,7 @@ exitplayer
 	ld a,255
 	ld (playlistpanel.isinactive),a
 	OS_SETSYSDRV
-	ld de,defaultplaylistfilename
-	ld a,(playlistchanged)
-	or a
-	call nz,saveplaylist
+	call savedefaultplaylist
 	QUIT
 
 deinitonexit
@@ -317,14 +315,23 @@ playerdeinitloop
 	push bc
 	push hl
 	ld a,(hl)
+	ld (.playerpage),a
 	SETPG4000
 	call playerdeinit
+.playerpage=$+1
+	ld e,0
+	OS_DELPAGE
 	pop hl
 	pop bc
 	inc hl
 	djnz playerdeinitloop
 	ret
 
+savedefaultplaylist
+	ld a,(playlistchanged)
+	or a
+	ret z
+	ld de,defaultplaylistfilename
 saveplaylist
 ;de = filename
 	push de
@@ -1596,11 +1603,12 @@ runoptionsode
 	disp STARTUP_CODE_ADDR
 runoptions
 	OS_SETSYSDRV
+	call savedefaultplaylist
 	ld de,mainfilename
-        OS_OPENHANDLE
+	OS_OPENHANDLE
 	push af
-        ld a,b
-        ld (.filehandle),a
+	ld a,b
+	ld (.filehandle),a
 	pop af
 	or a
 	jp nz,exitplayer
@@ -1611,11 +1619,11 @@ runoptions
 	ld de,mainbegin
 	ld hl,mainsize
 .filehandle=$+1
-        ld b,0
-        OS_READHANDLE
-        ld a,(.filehandle)
-        ld b,a
-        OS_CLOSEHANDLE
+	ld b,0
+	OS_READHANDLE
+	ld a,(.filehandle)
+	ld b,a
+	OS_CLOSEHANDLE
 	ld a,1
 	ld (runplayersetup),a
 	jp mainbegin

@@ -1,5 +1,5 @@
 ; ProTracker modules player for AY8910/TurboSound
-; Player for MIDI UART connected to AY port A.2 (e.g. ZX MultiSound)
+; Player for MIDI UART connected to AY/YM2608 IOA port bit 2 (e.g. ZX MultiSound)
 
 	DEVICE ZXSPECTRUM128
 	include "../_sdk/sys_h.asm"

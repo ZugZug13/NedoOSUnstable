@@ -1,3 +1,19 @@
+; 1 - MoonSound
+; 2 - NeoGS c декодером VS1003/VS1033/VS1053/VS1103
+; 3 - MIDI UART через первый чип AY (Multisound)
+; 4 - MIDI UART через второй чип AY
+MidiDevice=0
+
+;Указывает какое устройство использовать для воспроизведения .mod файлов.
+; 0 - плеер выбирает первое доступное устройство
+; 1 - MoonSound
+; 2 - проигрывание через прошивку GeneralSound/NeoGS
+ModDevice=0
+
+;Для разработчика! Надо увеличивать при каждом добавлении опций.
+IniFileVersion=1
+
+
 ; One-time initialization code, not retained after startup is complete.
 
 	include "common/opl4.asm"
@@ -99,33 +115,32 @@ playersetupmsghandlers_end
 
 playersetupoptions
 midioptions
-	dw 0x0405 : dw midioptionhandler : dw midioption1str
-	dw 0x0505 : dw midioptionhandler : dw midioption2str
-	dw 0x0605 : dw midioptionhandler : dw midioption3str
-	dw 0x0705 : dw midioptionhandler : dw midioption4str
-	dw 0x0805 : dw midioptionhandler : dw midioption5str
-	dw 0x0905 : dw midioptionhandler : dw midioption6str
+	dw midioption1str : dw midioptionhandler : dw defaultdevicedescstr
+	dw midioption2str : dw midioptionhandler : dw moonsounddescstr
+	dw midioption3str : dw midioptionhandler : dw midioption3descstr
+	dw midioption4str : dw midioptionhandler : dw midioption4descstr
+	dw midioption5str : dw midioptionhandler : dw midioption5descstr
+	dw midioption6str : dw midioptionhandler : dw midioption6descstr
 midioptioncount=($-midioptions)/6
 modoptions
-	dw 0x052f : dw modoptionhandler : dw modoption1str
-	dw 0x062f : dw modoptionhandler : dw modoption2str
-	dw 0x072f : dw modoptionhandler : dw modoption3str
+	dw modoption1str : dw modoptionhandler : dw defaultdevicedescstr
+	dw modoption2str : dw modoptionhandler : dw moonsounddescstr
+	dw modoption3str : dw modoptionhandler : dw modoption3descstr
 modoptioncount=($-modoptions)/6
 bomgemoonoption
-	dw 0x0e15 : dw bomgemoonhandler : dw bomgemoonoptionstr
+	dw bomgemoonoptionstr : dw bomgemoonhandler : dw bomgemoonoptiondescstr
 playersetupoptioncount=($-playersetupoptions)/6
 
-midioption1str db "[X] Auto Select Device        ",0
-midioption2str db "[ ] MoonSound (OPL4)          ",0
-midioption3str db "[ ] NeoGS (VS10x3 Synth)      ",0
-midioption4str db "[ ] UART AY1 (Multisound Old) ",0
-midioption5str db "[ ] UART AY2 (Multisound New) ",0
-midioption6str db "[ ] UART YM2608               ",0
-modoption1str db "[X] Auto Select Device  ",0
-modoption2str db "[ ] MoonSound (OPL4)    ",0
-modoption3str db "[ ] GeneralSound        ",0
-bomgemoonoptionstr
-	db "[ ] OPL3-only Device (BomgeMoon)  ",0
+midioption1str db 4,5,"[X] Auto Select Device        ",0
+midioption2str db 5,5,"[ ] MoonSound (OPL4)          ",0
+midioption3str db 6,5,"[ ] NeoGS (VS10x3 Synth)      ",0
+midioption4str db 7,5,"[ ] UART AY1 (Multisound Old) ",0
+midioption5str db 8,5,"[ ] UART AY2 (Multisound New) ",0
+midioption6str db 9,5,"[ ] UART YM2608               ",0
+modoption1str db 5,47,"[X] Auto Select Device  ",0
+modoption2str db 6,47,"[ ] MoonSound (OPL4)    ",0
+modoption3str db 7,47,"[ ] GeneralSound        ",0
+bomgemoonoptionstr db 14,21,"[ ] OPL3-only Device (BomgeMoon)  ",0
 settingsheaderstr
 	db "Player Settings",0
 setuphotkeysstr
@@ -136,6 +151,15 @@ moddevicestr
 	db "MOD Device...",0
 miscoptionstr
 	db "Misc...",0
+
+moonsounddescstr db "Проигрывать через MoonSound.",0
+defaultdevicedescstr db "Разрешает плееру использовать любое доступное устройство.",0
+midioption3descstr db "Используйте если у вас обновлённая версия NeoGS c декодером VLSI VS10x3.",0
+midioption4descstr db "Используйте если у вас MultiSound с прошивкой первой версии.",0
+midioption5descstr db "Используйте если у вас MultiSound с последней ревизией прошивки.",0
+midioption6descstr db "MIDI UART подключен через IOA YM2608.",0
+modoption3descstr db "Проигрывать через прошивку GeneralSound/NeoGS.",0
+bomgemoonoptiondescstr db "Используйте если у вас нет MoonSound, но есть карта с OPL3 чипом.",0
 
 activeoption db 0
 inifileversionsettings dw 0
@@ -187,12 +211,13 @@ updateradiobuttons
 .basedigit=$+1
 	add a,'0'
 	ld (hl),a
-	ld hl,4
-	add hl,de
+	ex de,hl
 	inc c
 .loop	ld e,(hl)
 	inc hl
 	ld d,(hl)
+	inc de
+	inc de
 	inc de
 	dec c
 	ld a,'X'
@@ -231,15 +256,22 @@ bomgemoonhandler
 	call updatecheckbox
 	jp drawsetupoptions
 
-setoption
+getactiveoptionaddr
+;hl=base addr
+;output: hl=active option addr
 	ld a,(activeoption)
 	add a,a
 	ld e,a
+	add a,a
+	add a,e
+	ld e,a
 	ld d,0
+	add hl,de
+	ret
+
+setoption
 	ld hl,playersetupoptions+2
-	add hl,de
-	add hl,de
-	add hl,de
+	call getactiveoptionaddr
 	ld e,(hl)
 	inc hl
 	ld d,(hl)
@@ -271,6 +303,8 @@ gonextfast
 	xor a
 	ld (activeoption),a
 	jp drawsetupoptions
+
+optiondescbuffer equ playlistpanel
 
 redrawplayersetupui
 	ld e,7
@@ -312,7 +346,8 @@ drawsetupoptions
 	ld hl,playersetupoptions
 	ld b,playersetupoptioncount
 	ld c,0
-.loop	push bc
+.optionsloop
+	push bc
 	ld a,(activeoption)
 	cp c
 	ld de,CURSORCOLOR
@@ -325,21 +360,63 @@ drawsetupoptions
 	inc hl
 	ld d,(hl)
 	push hl
+	ex de,hl
+	ld d,(hl)
+	inc hl
+	ld e,(hl)
+	inc hl
+	push hl
 	OS_SETXY
 	pop hl
-	ld de,3
+	call print_hl
+	pop hl
+	ld de,5
 	add hl,de
+	pop bc
+	inc c
+	djnz .optionsloop
+;print desc
+	ld de,DEFAULTCOLOR
+	OS_SETCOLOR
+	ld de,0x1600
+	OS_SETXY
+	ld hl,playersetupoptions+4
+	call getactiveoptionaddr
 	ld e,(hl)
 	inc hl
 	ld d,(hl)
-	inc hl
-	push hl
-	ex de,hl	
-	call print_hl
+	push de
+	ex de,hl
+	ld c,0
+	call findlastchar
+	ld a,l
+	sub e
+	dec a
+	ld c,a
+	ld a,80
+	sub c
+	rra
+	ld b,a
+	ld de,optiondescbuffer
+	ld a,' '
+.fillloop1
+	ld (de),a
+	inc de
+	djnz .fillloop1
 	pop hl
-	pop bc
-	inc c
-	djnz .loop
+	ldir
+	ld a,(optiondescbuffer+80)%256
+	sub e
+	ld b,a
+	ld a,' '
+.fillloop2
+	ld (de),a
+	inc de
+	djnz .fillloop2
+	xor a
+	ld (de),a
+	ld hl,optiondescbuffer
+	call print_hl
 	ret
 
 loadandparsesettings
